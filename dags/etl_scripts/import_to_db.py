@@ -5,7 +5,7 @@ from pathlib import Path
 
 class update_data():
     def __init__(self):
-        self.BASE = Path(__file__).resolve().parent
+        self.BASE = Path(__file__).resolve().parent.parent.parent
         self.connection = sqlite3.connect(self.BASE/'database/EPL.db')
         self.cursor = self.connection.cursor()
     def close(self):
@@ -16,7 +16,7 @@ class update_data():
         self.cursor.executemany("""
         INSERT INTO Teams(team_Id,team,short_Name,founded,home_Stadium,logo_Url)
         VALUES ( ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(team_Id) DO UPDATE SET
+        ON CONFLICT(short_Name) DO UPDATE SET
             team = excluded.team,
             short_Name = excluded.short_Name,
             founded = excluded.founded,
@@ -33,7 +33,7 @@ class update_data():
         INSERT INTO Standings(team_Id,pos,team,short_Name,played,won,draw,lost,
         goals_For,goals_Against,points)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(team_Id) DO UPDATE SET
+        ON CONFLICT(short_Name) DO UPDATE SET
             pos = excluded.pos,
             team = excluded.team,
             short_Name = excluded.short_Name,
@@ -148,6 +148,22 @@ class update_data():
         """,rows)
         self.connection.commit()
         print('upsert player_stat finished')
+    def upsert_predictions_table(self):
+        df = pd.read_csv(self.BASE/'data/predictions.csv')
+        rows = df[['match_id','home_team','away_team','prob_home_win',
+                   'prob_draw','prob_away_win']].values.tolist()
+        self.cursor.executemany("""
+        INSERT INTO Predictions(game_Id,home_Team,away_Team,prob_Home_win,
+        prob_Draw,prob_Away_win) VALUES(?,?,?,?,?,?)
+        ON CONFLICT(game_Id) DO UPDATE SET
+            home_Team = excluded.home_Team,
+            away_Team = excluded.away_Team,
+            prob_Home_win = excluded.prob_Home_win,
+            prob_Draw = excluded.prob_Draw,
+            prob_Away_win = excluded.prob_Away_win
+        """,rows)
+        print('upsert predictions finished')
+        self.connection.commit()
     def upsert_all(self):
         self.upsert_teams_table()
         self.upsert_Standings_table()
@@ -156,4 +172,6 @@ class update_data():
         self.upsert_Player_profile_table()
         self.upsert_Player_stat_table()
         print("done")
+        self.connection.close()
+    def close_connection(self):
         self.connection.close()
